@@ -4,7 +4,7 @@
 
 from io import StringIO
 import json
-from typing import Callable, Dict, Optional, Sequence, Type as TType, Union
+from typing import Callable, Dict, Generic, Optional, Sequence, Type as TType, TypeVar, Union
 
 from .. import LOG
 from ..damlast.daml_lf_1 import (
@@ -33,7 +33,6 @@ from ..damlast.util import package_local_name, unpack_arrow_type
 from ..damlast.visitor import ExprVisitor, ModuleVisitor, PackageVisitor, TypeVisitor
 from ..prim import to_date, to_datetime
 from .options import PrettyOptions
-from .util import is_hidden_module_name, maybe_parentheses
 
 __all__ = [
     "PrettyPrintBase",
@@ -45,12 +44,16 @@ __all__ = [
 ]
 
 
-# noinspection PyMethodMayBeStatic
-class PrettyPrintBase(PackageVisitor[str], ModuleVisitor[str], ExprVisitor[str], TypeVisitor[str]):
-    """
-    Convenience base class for shared code between all pretty-print implementations.
-    """
+P = TypeVar("P")
+M = TypeVar("M")
+E = TypeVar("E")
+T = TypeVar("T")
+Self = TypeVar("Self")
 
+
+class AstVisitor(
+    Generic[P, M, E, T], PackageVisitor[P], ModuleVisitor[M], ExprVisitor[E], TypeVisitor[T]
+):
     def __init__(
         self,
         lookup: "Optional[SymbolLookup]" = None,
@@ -65,6 +68,39 @@ class PrettyPrintBase(PackageVisitor[str], ModuleVisitor[str], ExprVisitor[str],
             self.context = CodeContext.from_options(context)
         else:
             raise TypeError("a CodeContext object required here")
+
+    def with_module(self: Self, module_ref: "ModuleRef") -> Self:
+        return type(self)(store=self.store, context=self.context.with_module(module_ref))
+
+    def with_decl(self: Self, decl_name: "Sequence[str]", decl_type: Type) -> Self:
+        """
+        Return a sub-scoped pretty print visitor under the context of a field with a specified name
+        and type.
+
+        :param decl_name: The name of the declaration.
+        :param decl_type: The type of the declaration.
+        :return: An instance of this type.
+        """
+        return type(self)(store=self.store, context=self.context.with_decl(decl_name, decl_type))
+
+    def with_type_abs(self: Self, type_abs: "Sequence[TypeVarWithKind]") -> Self:
+        return type(self)(store=self.store, context=self.context.with_type_abs(type_abs))
+
+    def with_type_app(self: Self, type_app: "Sequence[Type]") -> Self:
+        return type(self)(store=self.store, context=self.context.with_type_app(type_app))
+
+    def with_expression(self: Self) -> Self:
+        return type(self)(store=self.store, context=self.context.with_expression())
+
+    def with_statement_block(self: Self) -> Self:
+        return type(self)(store=self.store, context=self.context.with_statement_block())
+
+
+# noinspection PyMethodMayBeStatic
+class PrettyPrintBase(AstVisitor[str, str, str, str]):
+    """
+    Convenience base class for shared code between all pretty-print implementations.
+    """
 
     def lexer(self):
         """
@@ -96,20 +132,16 @@ class PrettyPrintBase(PackageVisitor[str], ModuleVisitor[str], ExprVisitor[str],
             for archive in self.lookup.archives():
                 buf.write(self.visit_package(archive.package))
                 buf.write("\n")
+            buf.write(self.visit_footer())
             return buf.getvalue()
 
-    def with_module(self, module_ref: "ModuleRef"):
-        return type(self)(lookup=self.lookup, context=self.context.with_module(module_ref))
+    def visit_header(self) -> "str":
+        return ""
 
-    def with_decl(self, decl_name: Sequence[str], decl_type: Type):
-        """
-        Return a sub-scoped pretty print visitor under the context of a field with a specified name
-        and type.
+    def visit_footer(self) -> "str":
+        return ""
 
-        :param decl_name: The name of the declaration.
-        :param decl_type: The type of the declaration.
-        :return: An instance of this type.
-        """
+    def visit_package(self, package_id: str, package: "Package") -> "str":
         return type(self)(lookup=self.lookup, context=self.context.with_decl(decl_name, decl_type))
 
     def with_type_abs(self, type_abs: "Sequence[TypeVarWithKind]"):

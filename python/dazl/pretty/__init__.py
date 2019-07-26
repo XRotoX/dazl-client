@@ -18,6 +18,7 @@ from ._render_base import PrettyPrintBase, pretty_print_syntax  # type: ignore
 from .options import PrettyOptions
 from .render_csharp import CSharpPrettyPrint  # type: ignore
 from .render_daml import DEFAULT_PRINTER as DAML_PRETTY_PRINTER, DamlPrettyPrinter  # type: ignore
+from .render_json import JsonPrettyPrint
 from .render_python import PythonPrettyPrint  # type: ignore
 from .util import maybe_parentheses
 
