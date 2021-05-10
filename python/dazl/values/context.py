@@ -100,7 +100,13 @@ class Context:
                 elif item_type.prim.prim == PrimType.TEXTMAP:
                     return self.mapper.prim_text_map(self, item_type.prim.args[0], obj)
                 elif item_type.prim.prim == PrimType.NUMERIC:
-                    return self.mapper.prim_numeric(self, item_type.prim.args[0].nat, obj)
+                    nat = item_type.prim.args[0].nat
+                    if nat is not None:
+                        return self.mapper.prim_numeric(self, nat, obj)
+                    else:
+                        raise ValueError(
+                            f"a Numeric type had an unexpected type as a parameter: {item_type.prim.args[0]}"
+                        )
                 elif item_type.prim.prim == PrimType.GENMAP:
                     return self.mapper.prim_gen_map(
                         self, item_type.prim.args[0], item_type.prim.args[1], obj
@@ -230,6 +236,10 @@ class Context:
         """
         Convert a contract ID string to a :class:`ContractId`.
         """
+        con = element_type.con
+        if con is None:
+            raise ValueError(f"invalid type argument for ContractId: {element_type}")
+
         with warnings.catch_warnings():
             # TODO: Drop this and switch to new-style ContractIds
             warnings.simplefilter("ignore", DeprecationWarning)
@@ -240,9 +250,9 @@ class Context:
             elif isinstance(contract_id, ContractId):
                 # convert new-style ContractId instances to deprecated subclasses; for now, this is
                 # still the canonical form of a ContractId until the deprecated version is dropped
-                return DeprecatedContractId(contract_id.value, element_type.con.tycon)
+                return DeprecatedContractId(contract_id.value, con.tycon)
             else:
-                return DeprecatedContractId(contract_id, element_type.con.tycon)
+                return DeprecatedContractId(contract_id, con.tycon)
 
     def resolve_data_type(self, con: "Type.Con") -> "DefDataType":
         """
@@ -271,6 +281,7 @@ class Context:
 
         if dt.record is not None:
             return DefDataType(
+                params=(),
                 record=self._replace_all_type_vars(type_vars, dt.record),
                 serializable=dt.serializable,
                 location=dt.location,
@@ -278,17 +289,18 @@ class Context:
 
         elif dt.variant is not None:
             return DefDataType(
+                params=(),
                 variant=self._replace_all_type_vars(type_vars, dt.variant),
                 serializable=dt.serializable,
                 location=dt.location,
             )
 
         elif dt.enum is not None:
-            return DefDataType(enum=dt.enum, serializable=dt.serializable, location=dt.location)
-
-        elif dt.synonym is not None:
             return DefDataType(
-                synonym=dt.synonym, serializable=dt.serializable, location=dt.location
+                params=(),
+                enum=dt.enum,
+                serializable=dt.serializable,
+                location=dt.location,
             )
 
         else:
