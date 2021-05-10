@@ -280,7 +280,7 @@ def _parse_daml_metadata_pb(archive: "Archive") -> "PackageStore":
                     LOG.warning("Unexpected non-complex type will be ignored: %r", tt)
 
             for template_pb in module.templates:
-                con = TypeConName(current_module, template_pb.tycon.segments)
+                con = TypeConName(current_module, template_pb.tycon)
                 data_type = psb.get_type(con)
                 if isinstance(data_type, RecordType):
                     psb.add_template(
@@ -342,8 +342,12 @@ def create_data_type(
             VariantType,
         )
 
+        name = dt.name
+        if name is None:
+            raise ValueError("TypeReference does not support anonymous types")
+
         type_vars = tuple(TypeVariable(type_var.var) for type_var in dt.params)
-        tt = TypeReference(con=TypeConName(current_module_ref, dt.name.segments))
+        tt = TypeReference(con=TypeConName(current_module_ref, name))
 
         if dt.record is not None:
             d = OrderedDict()

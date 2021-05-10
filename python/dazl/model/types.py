@@ -110,7 +110,7 @@ def type_ref(s: str) -> "TypeReference":
             entity_name = components[2].split(".")
 
         return TypeReference(
-            con=TypeConName(module=ModuleRef(pkg_ref, module_name), name=entity_name)
+            con=TypeConName(module=ModuleRef(pkg_ref, module_name), name=DottedName(entity_name))
         )
 
 
