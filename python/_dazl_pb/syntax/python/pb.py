@@ -5,6 +5,8 @@ import os
 from typing import Optional
 
 from google.protobuf.descriptor_pb2 import FieldDescriptorProto
+
+# noinspection PyProtectedMember
 from grpc_tools.protoc import _PROTO_MODULE_SUFFIX, _SERVICE_MODULE_SUFFIX
 
 from .types import BOOL, BYTES, FLOAT, INT, STRING, PyType
