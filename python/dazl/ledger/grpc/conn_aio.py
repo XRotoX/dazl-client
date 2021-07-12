@@ -513,7 +513,7 @@ class Connection(aio.Connection):
         # this is support for versions of Daml Connect prior to 1.9.0
         act_as = meta.act_as
         if act_as is not None:
-            act_as_party = act_as[0]
+            act_as_party = next(iter(act_as))
         else:
             raise ValueError("current access rights do not include any act-as parties")
 
