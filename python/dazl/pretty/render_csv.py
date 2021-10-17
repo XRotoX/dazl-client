@@ -5,9 +5,6 @@
 from io import StringIO
 from typing import Dict, List, Tuple
 
-from dazl.model.types import ContractIdType, ListType, RecordType, Type, TypeReference
-from dazl.model.types_store import PackageStore
-
 
 def write_csv(store: PackageStore) -> str:
     templates = {

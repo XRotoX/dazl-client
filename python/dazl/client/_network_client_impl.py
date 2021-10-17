@@ -588,7 +588,6 @@ class _NetworkRunner:
                 None,
                 metadata.ledger_id,
                 self._network_impl.lookup,
-                metadata._store,
             )
             init_futs.append(ensure_future(self._network_impl.emit_event(init_evt)))
         for party_impl in party_impls:
@@ -612,7 +611,6 @@ class _NetworkRunner:
                 None,
                 metadata.ledger_id,
                 self._network_impl.lookup,
-                metadata._store,
                 offset,
             )
             ready_futs.append(ensure_future(self._network_impl.emit_event(ready_evt)))

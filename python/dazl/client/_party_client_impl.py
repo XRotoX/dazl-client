@@ -171,7 +171,6 @@ class _PartyClientImpl:
             current_time,
             metadata.ledger_id,
             self.parent.lookup,
-            metadata._store,
         )
         return self.emit_event(evt)
 
@@ -222,13 +221,13 @@ class _PartyClientImpl:
             have been processed.
         """
         ready_event = ReadyEvent(
-            self, self.party, time, metadata.ledger_id, self.parent.lookup, metadata._store, offset
+            self, self.party, time, metadata.ledger_id, self.parent.lookup, offset
         )
         self._known_packages.update(self.parent.lookup.package_ids())
         await self.emit_event(ready_event)
 
         pkg_event = PackagesAddedEvent(
-            self, self.party, time, metadata.ledger_id, self.parent.lookup, metadata._store, True
+            self, self.party, time, metadata.ledger_id, self.parent.lookup, True
         )
         await self.emit_event(pkg_event)
 
@@ -377,7 +376,6 @@ class _PartyClientImpl:
                     None,
                     metadata.ledger_id,
                     self.parent.lookup,
-                    metadata._store,
                     False,
                 )
                 self._known_packages.update(all_packages)
