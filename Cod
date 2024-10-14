@@ -1,0 +1,173 @@
+# Documentation: Setting Up Alerting to Ansible
+
+This documentation explains how to set up an alerting mechanism that integrates with Ansible for automated responses to specific events or conditions in your infrastructure. We will cover the following:
+
+1. **Creating Alerting Profiles**  
+2. **Configuring Alert Channels**  
+3. **Setting Up Ansible Playbooks and Jobs**  
+4. **Automating Responses Using Ansible**  
+5. **Testing and Monitoring**
+
+## 1. Creating Alerting Profiles
+
+An alerting profile helps to define when, where, and under what conditions alerts should be triggered.
+
+### Step-by-Step Instructions
+
+1. **Access the Monitoring Tool**: Open your monitoring tool (e.g., Zabbix, Prometheus, Nagios, or others).
+2. **Define the Metrics**: Choose the metrics or conditions that will trigger alerts, such as:
+   - CPU usage exceeds 90% for more than 5 minutes.
+   - Disk space utilization goes above 95%.
+   - Network latency exceeds 200ms.
+3. **Create a New Alerting Profile**:
+   - Navigate to **Alerting** or **Notification Settings**.
+   - Create a new profile and define a name like “Critical Infrastructure Alerts”.
+4. **Set Alert Conditions**: Add conditions based on your infrastructure's thresholds. Example:
+   - **Condition**: "When CPU usage > 90%"
+   - **Severity Level**: "Critical"
+5. **Select Notification Channels**: Choose channels through which notifications will be sent (e.g., email, webhook).
+   
+## 2. Configuring Alert Channels
+
+To integrate with Ansible, we will configure a webhook or email alerting channel to send messages to a system where Ansible can process them.
+
+### Webhook-Based Integration
+
+1. **Configure Webhook Channel**:
+   - Navigate to **Notification Channels**.
+   - Add a new channel and select **Webhook**.
+   - Provide the URL where alerts will be sent. This could be a service that listens for alerts and triggers Ansible jobs via APIs.
+   
+   Example Webhook URL for alert forwarding:  
+   `http://your-ansible-trigger-url/api/v1/alerts`
+   
+2. **Customize the Payload**:
+   - Customize the payload to include necessary details like:
+     ```json
+     {
+       "alert_name": "{{ alert_name }}",
+       "triggered_at": "{{ timestamp }}",
+       "severity": "{{ severity }}",
+       "message": "{{ message }}",
+       "target_host": "{{ host }}"
+     }
+     ```
+   - This payload will be sent to the Ansible system to handle the alert.
+
+### Email-Based Integration (optional)
+
+Alternatively, you can configure email alerts to trigger an Ansible playbook.
+
+1. **Configure Email Channel**:
+   - Add a new email channel.
+   - Set the recipient to an email-to-trigger service that invokes an Ansible playbook.
+
+   Example recipient: `alerts@ansible-trigger-service.com`
+   
+2. **Customize the Subject and Body**: Include relevant details like hostnames, alert type, and severity in the email body.
+
+## 3. Setting Up Ansible Playbooks and Jobs
+
+Ansible will respond to alerts by executing predefined playbooks.
+
+### Step-by-Step Instructions
+
+1. **Install Ansible**: Ensure Ansible is installed on the control machine.
+   - On a Linux system:
+     ```bash
+     sudo apt update
+     sudo apt install ansible
+     ```
+     
+2. **Create an Ansible Playbook**:
+   - A playbook contains tasks that should run in response to an alert.
+   - Create a new playbook, for example, `resolve_high_cpu.yml`:
+     ```yaml
+     ---
+     - name: Resolve High CPU Usage
+       hosts: "{{ target_host }}"
+       tasks:
+         - name: Identify processes with high CPU usage
+           shell: "ps aux --sort=-%cpu | head -5"
+           register: cpu_processes
+           
+         - name: Kill the highest CPU-consuming process
+           shell: "kill -9 $(ps aux --sort=-%cpu | awk 'NR==2{print $2}')"
+           when: cpu_processes.stdout_lines[0] is defined
+     ```
+
+3. **Create an Ansible Job Template** (For Automation):
+   - Use an automation platform like **AWX** or **Ansible Tower**.
+   - Define a job template in the platform with the created playbook.
+   - Example configuration:
+     - **Name**: `Handle High CPU Alerts`
+     - **Playbook**: `resolve_high_cpu.yml`
+     - **Inventory**: Target hosts (e.g., web servers, databases).
+
+4. **Configure Webhook/Email Handler**:
+   - If you are using Ansible Tower, go to **Settings > Webhooks**.
+   - Configure the webhook URL to accept alert data from the monitoring tool.
+
+   If using webhook integration:
+   - The payload should trigger the specific playbook related to the alert.
+   - In Ansible Tower, use a **Webhook Receiver** URL in the format:
+     `https://your-tower-url/api/v2/job_templates/{job_template_id}/launch/`
+   
+## 4. Automating Responses Using Ansible
+
+Once an alert is triggered, the monitoring tool will send data via webhook or email to the Ansible automation platform, triggering a job.
+
+### Ansible Tower/AWX Integration
+
+1. **Webhook Triggers**:
+   - In Ansible Tower or AWX, set up webhook listeners to monitor incoming alerts.
+   - When an alert arrives with a matching condition (e.g., high CPU usage), the associated job will run.
+
+2. **Job Execution**:
+   - The Ansible job will execute based on the alert condition.
+   - Example: For a high CPU usage alert, Ansible will:
+     - Identify the process causing the spike.
+     - Optionally, kill the process.
+     - Send a success/failure notification.
+
+3. **Post-Execution**: 
+   - Configure a callback to the monitoring tool or logging system to inform about the result of the Ansible job.
+   
+### Manual Triggering (optional)
+
+If automation is not desired, an administrator can manually review alerts and trigger the playbook via the Ansible command line or GUI.
+
+1. **Command-line Triggering**:
+   - SSH into the Ansible control machine.
+   - Execute the playbook:
+     ```bash
+     ansible-playbook resolve_high_cpu.yml -i hosts --extra-vars "target_host=web01"
+     ```
+
+## 5. Testing and Monitoring
+
+### Testing the Setup
+
+1. **Simulate Alerts**:
+   - Simulate a condition that would trigger an alert (e.g., artificially increase CPU load).
+   - Verify if the alert is sent to Ansible.
+
+2. **Verify Ansible Execution**:
+   - Check if the correct Ansible playbook was executed automatically upon receiving the alert.
+   - Review the logs of the playbook execution in Ansible Tower or the control machine.
+
+### Monitoring Alerts
+
+1. **Monitor Alert Frequency**: Ensure that alert thresholds are correctly configured to prevent excessive job runs.
+2. **Log Ansible Playbook Runs**: Monitor the success or failure of the Ansible jobs through Tower’s job logging or using external logging solutions.
+
+## Additional Considerations
+
+1. **Alert De-duplication**: Ensure alerts are deduplicated, so the same Ansible job isn’t triggered multiple times unnecessarily.
+2. **Alert Escalation**: Define escalation policies to run different playbooks based on alert severity (e.g., warning vs. critical).
+3. **Security**: Ensure secure communication between your monitoring system and Ansible (e.g., using SSL for webhooks).
+4. **Recovery Action**: Ensure that Ansible playbooks also log the actions taken for future auditing.
+
+---
+
+By following these steps, you can establish an automated alerting and remediation system that responds to critical conditions in your infrastructure using Ansible. This setup helps in reducing downtime and operational overhead by automating routine responses to alerts.
