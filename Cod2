@@ -1,0 +1,213 @@
+# Documentation: Setting Up Alerting to Ansible using Dynatrace
+
+This documentation explains how to set up an alerting mechanism in **Dynatrace** that integrates with **Ansible** for automated responses to specific events. We will cover:
+
+1. **Creating Alerting Profiles in Dynatrace**  
+2. **Configuring Dynatrace Problem Notification (Webhook)**  
+3. **Setting Up Ansible Playbooks and Jobs**  
+4. **Automating Responses Using Ansible**  
+5. **Testing and Monitoring**  
+
+---
+
+## 1. Creating Alerting Profiles in Dynatrace
+
+An alerting profile in Dynatrace allows you to define the conditions under which alerts (referred to as problems in Dynatrace) are triggered and forwarded to other systems (e.g., Ansible). Here's how you set it up:
+
+### Step-by-Step Instructions
+
+1. **Log in to Dynatrace**:
+   - Access your Dynatrace environment by visiting your environment URL, e.g., `https://<environment_id>.live.dynatrace.com`.
+
+2. **Navigate to Alerting Profiles**:
+   - Go to the menu on the left sidebar and navigate to `Settings` > `Anomaly detection` > `Alerting profiles`.
+
+3. **Create a New Alerting Profile**:
+   - Click on the **Create alerting profile** button.
+   - Name the profile, for example, **Critical Alerts to Ansible**.
+
+4. **Define Alert Conditions**:
+   - Specify the type of problems or anomalies that should trigger an alert. For example:
+     - **Problem severity**: Select only **critical problems**.
+     - **Impact level**: Select `Infrastructure`, `Service`, or `Application`, depending on the desired alert scope.
+     - **Problem type**: Choose specific types such as "High CPU", "Memory Issues", or "Failed Transactions".
+
+5. **Save the Alerting Profile**.
+
+For more details, refer to Dynatrace's official documentation on alerting profiles:  
+[Dynatrace Alerting Profiles Documentation](https://www.dynatrace.com/support/help/alerting-profiles).
+
+---
+
+## 2. Configuring Dynatrace Problem Notification (Webhook)
+
+To integrate Dynatrace with Ansible, we'll use **webhook notifications**. These notifications are triggered by alerts and can send data to an endpoint, which can then trigger an Ansible job.
+
+### Step-by-Step Instructions
+
+1. **Navigate to Problem Notification Settings**:
+   - In Dynatrace, go to `Settings` > `Integration` > `Problem notifications`.
+   - Click on **Set up notifications** and select **Custom integration (Webhook)**.
+
+2. **Create a New Webhook Integration**:
+   - Click on **Add notification** > **Custom integration**.
+   - Name the integration, e.g., **Send Alerts to Ansible**.
+   - Enter the **Webhook URL** for your Ansible Tower or AWX instance. This is the URL that will receive the alert and trigger a corresponding Ansible playbook:
+     - Example Webhook URL (adjust for your environment):
+       ```bash
+       https://<ansible_tower_url>/api/v2/job_templates/<template_id>/launch/
+       ```
+     - Replace `<ansible_tower_url>` and `<template_id>` with your actual Ansible Tower/AWX server URL and job template ID.
+
+3. **Customize the Payload**:
+   - Customize the payload to include necessary alert details. Use the following example payload:
+     ```json
+     {
+       "State": "{State}",
+       "ProblemID": "{ProblemID}",
+       "ProblemTitle": "{ProblemTitle}",
+       "PID": "{PID}",
+       "ProblemDetails": "{ProblemDetails}",
+       "ImpactedEntity": "{ImpactedEntity}",
+       "ImpactedEntities": "{ImpactedEntities}",
+       "SeverityLevel": "{SeverityLevel}",
+       "StartTime": "{StartTime}",
+       "EndTime": "{EndTime}"
+     }
+     ```
+   - These fields provide critical information about the Dynatrace alert, such as problem ID, severity, and impacted entities.
+
+4. **Configure Alert Filtering**:
+   - Select the **Alerting Profile** you created earlier (e.g., **Critical Alerts to Ansible**) to filter the alerts this webhook will receive.
+
+5. **Save the Notification**.
+
+For more information, see Dynatrace's guide on webhook integrations:  
+[Dynatrace Webhook Documentation](https://www.dynatrace.com/support/help/extend-dynatrace/integrations/third-party-integrations/problem-notifications/#webhook).
+
+---
+
+## 3. Setting Up Ansible Playbooks and Jobs
+
+Ansible will respond to alerts by executing predefined playbooks that resolve the issue or collect more information for further troubleshooting.
+
+### Step-by-Step Instructions
+
+1. **Install Ansible**:
+   - On your Ansible control node or Tower/AWX instance, install Ansible:
+     ```bash
+     sudo apt update
+     sudo apt install ansible
+     ```
+
+2. **Create Ansible Playbooks**:
+   - Create an Ansible playbook to handle the alert Dynatrace sends. For example, a playbook to resolve high CPU usage:
+     ```yaml
+     ---
+     - name: Resolve High CPU Usage
+       hosts: "{{ impacted_entity }}"
+       tasks:
+         - name: Check CPU usage
+           shell: "top -bn1 | grep 'Cpu(s)'"
+           register: cpu_usage
+
+         - name: Kill process with high CPU usage
+           shell: "kill -9 $(ps aux --sort=-%cpu | awk 'NR==2{print $2}')"
+           when: cpu_usage.stdout | regex_search('([9][0-9])%') # Matches >90% CPU
+     ```
+
+   - Save the playbook as `resolve_high_cpu.yml`.
+
+3. **Configure Inventory**:
+   - Ensure your `hosts` inventory contains the target systems (or entities impacted by the problem), such as:
+     ```ini
+     [web_servers]
+     web01 ansible_host=192.168.1.10
+     web02 ansible_host=192.168.1.11
+     ```
+
+4. **Set Up an Ansible Job Template**:
+   - If using **Ansible Tower** or **AWX**, create a job template.
+   - Navigate to `Templates` > `Add` > `Job Template`.
+   - Configure the template:
+     - **Name**: `Resolve High CPU`
+     - **Playbook**: Select `resolve_high_cpu.yml`.
+     - **Inventory**: Choose the appropriate inventory (e.g., web servers).
+     - **Webhook**: Enable webhooks if you want this job triggered by Dynatrace.
+
+5. **Save the Job Template**.
+
+For more detailed instructions on job templates, refer to Ansible Tower documentation:  
+[Ansible Tower Job Templates Documentation](https://docs.ansible.com/ansible-tower/latest/html/userguide/job_templates.html).
+
+---
+
+## 4. Automating Responses Using Ansible
+
+Once the webhook is set up in Dynatrace, alerts will be sent to Ansible automatically, triggering jobs to respond to the problem.
+
+### Webhook Integration with Ansible Tower/AWX
+
+1. **Webhook Listener**:
+   - In Ansible Tower or AWX, configure a webhook listener in the job template.
+   - This ensures that when the Dynatrace webhook sends an alert, the specified playbook will be executed.
+
+2. **Payload Handling**:
+   - The payload from Dynatrace will be parsed in Ansible to extract relevant data like the impacted entity or problem type.
+   - Ansible will use this data to determine the appropriate action, such as targeting a specific server in your infrastructure.
+
+### Example Webhook Job Launch API
+
+Use the following example API request in Dynatrace’s webhook configuration to trigger Ansible jobs:
+
+```bash
+POST https://<ansible_tower_url>/api/v2/job_templates/<template_id>/launch/
+```
+
+The payload from Dynatrace could look like this:
+
+```json
+{
+  "ProblemID": "abc123",
+  "ImpactedEntity": "web01",
+  "SeverityLevel": "Critical"
+}
+```
+
+This data will be processed by Ansible to target the `web01` server and run the specified remediation playbook.
+
+---
+
+## 5. Testing and Monitoring
+
+### Testing the Setup
+
+1. **Simulate an Alert in Dynatrace**:
+   - Generate a test problem by simulating high CPU usage or another anomaly in your environment.
+
+2. **Verify Webhook Trigger**:
+   - Check if the webhook notification is sent to Ansible Tower/AWX.
+   - Monitor the job execution in Ansible Tower or on the control machine by verifying logs.
+
+3. **Review Job Execution**:
+   - Check if the Ansible playbook was executed and the issue resolved.
+   - Log any output or failures for further debugging.
+
+### Monitoring Alerts
+
+1. **Dynatrace Problem Dashboard**:
+   - Monitor incoming problems and ensure that only the critical ones trigger Ansible jobs.
+
+2. **Ansible Tower Job Logs**:
+   - Review job logs in Ansible Tower for success or failure of remediation actions.
+
+For more advanced monitoring, you can integrate Dynatrace and Ansible with a central logging platform, such as Elasticsearch or Splunk.
+
+---
+
+## Additional Resources and Links
+
+- [Dynatrace Webhook Integration Documentation](https://www.dynatrace.com/support/help/extend-dynatrace/integrations/third-party-integrations/problem-notifications/#webhook)
+- [Ansible Tower Documentation](https://docs.ansible.com/ansible-tower/latest/html/userguide/job_templates.html)
+- [Dynatrace Alerting Profiles Documentation](https://www.dynatrace.com/support/help/alerting-profiles)
+- [Dynatrace
